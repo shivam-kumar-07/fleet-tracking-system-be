@@ -102,7 +102,7 @@ export class FleetService {
       // ✅ End of journey → freeze
       if (i >= list.length - 1) {
         const last = { ...list[list.length - 1] };
-        last.status = 'stopped';
+        last.status = 'completed';
         last.speed = 0;
         last.progress = 100;
         last.updatedAt = new Date().toISOString();
@@ -140,7 +140,7 @@ export class FleetService {
       const m = Math.round((hours - h) * 60);
       v.eta = `${h}h ${m}m`;
     } else {
-      v.eta = 'Idle';
+      v.eta = 'Completed';
     }
   
     return v;
