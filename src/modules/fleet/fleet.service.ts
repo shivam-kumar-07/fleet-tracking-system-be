@@ -50,7 +50,7 @@ export class FleetService {
 
   /** Convert raw event → unified vehicle structure */
   private normalizeEvent(e: any): Vehicle {
-    let status: 'moving' | 'idle' | 'stopped' = 'idle';
+    let status: 'moving' | 'idle' | 'stopped' | 'completed' = 'idle';
     let speed = 0;
     let completed = false;
 
@@ -64,7 +64,7 @@ export class FleetService {
     }
 
     if (e.event_type === 'trip_completed') {
-      status = 'stopped';
+      status = 'completed';
       completed = true;
       speed = 0;
     }
