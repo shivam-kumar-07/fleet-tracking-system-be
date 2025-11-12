@@ -15,4 +15,9 @@ export class AppController {
     return { message: 'service is up and running' };
   }
 
+  @Get('/')
+  onStart() {
+    return { message: 'service is up and running' };
+  }
+
 }
