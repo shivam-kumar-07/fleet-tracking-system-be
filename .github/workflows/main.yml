@@ -35,9 +35,14 @@
           run: |
             rm -rf deploy || true
             mkdir deploy
+
+            # Copy data into dist/ (this is the fix)
+            cp -r src/data dist/data || true
+
+            # Copy final build output into deploy folder
             cp -r dist package*.json deploy/
-            cp -r src/data deploy/ || true
             ls -la deploy
+
 
         - name: Upload artifact
           uses: actions/upload-artifact@v4
