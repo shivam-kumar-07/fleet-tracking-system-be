@@ -60,18 +60,18 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y rsync openssh-client
       
       - name: Debug Secrets (masked)
-        run: |
-          echo "EC2_HOST starts with: ${EC2_HOST:0:10}..."
-          echo "EC2_PORT is set to: $EC2_PORT"
-          echo "EC2_USER is: $EC2_USER"
-          echo "DEPLOY_DIR is: $DEPLOY_DIR"
-          echo "APP_NAME is: $APP_NAME"
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_PORT: ${{ secrets.EC2_PORT }}
           EC2_USER: ${{ secrets.EC2_USER }}
           DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
           APP_NAME: ${{ secrets.APP_NAME }}
+        run: |
+          echo "EC2_HOST starts with: ${EC2_HOST:0:10}..."
+          echo "EC2_PORT is set to: $EC2_PORT"
+          echo "EC2_USER is: $EC2_USER"
+          echo "DEPLOY_DIR is: $DEPLOY_DIR"
+          echo "APP_NAME is: $APP_NAME"
 
       - name: Configure SSH
         run: |
