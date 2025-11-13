@@ -1,12 +1,28 @@
 version: 0.2
+
 phases:
   install:
+    runtime-versions:
+      nodejs: 18
     commands:
+      - echo Installing NPM packages...
       - npm ci
+  pre_build:
+    commands:
+      - echo Pre-build steps...
   build:
     commands:
+      - echo Building the project...
       - npm run build
+      - echo Packaging artifact...
+      - mkdir -p deploy
+      - cp -r package.json package-lock.json deploy/
+      - cp -r dist deploy/
+      - cp -r src/data deploy/
+      - cp -r scripts deploy/ || true
+      - cp -r .env.deploy deploy/  || true
 artifacts:
   files:
-    - '**/*'
-  base-directory: dist
+    - deploy/**/*
+  discard-paths: no
+  base-directory: deploy
