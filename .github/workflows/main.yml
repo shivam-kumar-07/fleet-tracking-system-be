@@ -66,8 +66,22 @@ jobs:
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
 
-          # add EC2 host to known_hosts (safe hashed format)
+          # Add EC2 host to known_hosts (fixed with host parameter)
           ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Debug Secrets (masked)
+        run: |
+          echo "EC2_HOST starts with: ${EC2_HOST:0:10}..."
+          echo "EC2_PORT is set to: $EC2_PORT"
+          echo "EC2_USER is: $EC2_USER"
+          echo "DEPLOY_DIR is: $DEPLOY_DIR"
+          echo "APP_NAME is: $APP_NAME"
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_PORT: ${{ secrets.EC2_PORT }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
+          APP_NAME: ${{ secrets.APP_NAME }}
 
       - name: Upload files to EC2
         env:
