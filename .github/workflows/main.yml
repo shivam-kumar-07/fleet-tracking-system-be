@@ -78,34 +78,27 @@
 
         - name: Restart app on EC2
           run: |
-            echo "Remote Node: $(which node || echo 'node not found')"
-            echo "Remote NPM:  $(which npm || echo 'npm not found')"
-            echo "Remote PM2:  $(which pm2 || echo 'pm2 not found')"
+            echo "Connecting to remote server..."
 
-            # Run remote commands
-            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p ${{ secrets.EC2_PORT }} "ubuntu@${{ secrets.EC2_HOST }}" << 'EOF_REMOTE'
-              # ---------- On remote server ----------
-              # Use absolute paths for node/npm/pm2 to avoid NVM non-interactive issues.
-              NODE_BIN="/home/ubuntu/.nvm/versions/node/v20.17.0/bin"
-              export PATH="$NODE_BIN:$PATH"
+            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p 22 ubuntu@${{ secrets.EC2_HOST }} << EOF_REMOTE
+              
+            cd "${{ secrets.DEPLOY_DIR }}"
 
-              cd "${{ secrets.DEPLOY_DIR }}"
+            echo "Installing production dependencies..."
+            npm ci --only=production
 
-              echo "Installing production dependencies..."
-              \$NODE_BIN/npm ci --only=production
+            echo "Stopping existing app..."
+            if pm2 id fleet-tracking > /dev/null 2>&1; then
+              pm2 stop fleet-tracking || true
+              pm2 delete fleet-tracking || true
+            fi
 
-              echo "Stopping existing app..."
-              if \$NODE_BIN/pm2 id "${{ secrets.APP_NAME }}" > /dev/null 2>&1; then
-                \$NODE_BIN/pm2 stop "${{ secrets.APP_NAME }}" || true
-                \$NODE_BIN/pm2 delete "${{ secrets.APP_NAME }}" || true
-              fi
+            echo "Starting app with PM2..."
+            pm2 start dist/main.js --name fleet-tracking --time
+            pm2 save
 
-              echo "Starting app..."
-              \$NODE_BIN/pm2 start dist/main.js --name "${{ secrets.APP_NAME }}" --time
-              \$NODE_BIN/pm2 save
+            echo "Remote deploy finished."
+            exit 0
 
-              echo "Remote deploy finished."
-              exit 0
             EOF_REMOTE
-          shell: bash
 
