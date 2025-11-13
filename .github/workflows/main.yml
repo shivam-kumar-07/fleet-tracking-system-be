@@ -1,110 +1,109 @@
-name: Build and Deploy to EC2
+  name: Build and Deploy to EC2
 
-on:
-  push:
-    branches:
-      - main
+  on:
+    push:
+      branches:
+        - main
 
-env:
-  NODE_VERSION: 18
+  env:
+    NODE_VERSION: 18
 
-permissions:
-  contents: read
+  permissions:
+    contents: read
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+  jobs:
+    build:
+      runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
 
-      - name: Use Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+        - name: Use Node.js
+          uses: actions/setup-node@v4
+          with:
+            node-version: ${{ env.NODE_VERSION }}
+            cache: 'npm'
 
-      - name: Install dependencies
-        run: npm ci
+        - name: Install dependencies
+          run: npm ci
 
-      - name: Build (ts -> js)
-        run: npm run build
+        - name: Build (ts -> js)
+          run: npm run build
 
-      - name: Prepare deploy folder
-        run: |
-          rm -rf deploy || true
-          mkdir deploy
-          cp -r dist package*.json deploy/
-          cp -r src/data deploy/ || true
-          ls -la deploy
+        - name: Prepare deploy folder
+          run: |
+            rm -rf deploy || true
+            mkdir deploy
+            cp -r dist package*.json deploy/
+            cp -r src/data deploy/ || true
+            ls -la deploy
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: deploy-package
-          path: deploy
+        - name: Upload artifact
+          uses: actions/upload-artifact@v4
+          with:
+            name: deploy-package
+            path: deploy
 
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
+    deploy:
+      runs-on: ubuntu-latest
+      needs: build
 
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: deploy-package
-          path: deploy
+      steps:
+        - name: Download artifact
+          uses: actions/download-artifact@v4
+          with:
+            name: deploy-package
+            path: deploy
 
-      - name: Install SSH + rsync
-        run: sudo apt-get update && sudo apt-get install -y rsync openssh-client
+        - name: Install SSH + rsync
+          run: sudo apt-get update && sudo apt-get install -y rsync openssh-client
 
-      - name: Configure SSH
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
+        - name: Configure SSH
+          run: |
+            mkdir -p ~/.ssh
+            chmod 700 ~/.ssh
+            echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+            chmod 600 ~/.ssh/id_rsa
 
-          # Add EC2 host to known_hosts
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+            # Add EC2 host to known_hosts (fixed with host parameter)
+            ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Upload files to EC2
-        env:
-          RSYNC_RSH: "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p 22"
-        run: |
-          rsync -avz --delete deploy/ \
-            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:${{ secrets.DEPLOY_DIR }}/
+        - name: Upload files to EC2
+          env:
+            RSYNC_RSH: "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p 22"
+          run: |
+            rsync -avz --delete deploy/ \
+              ubuntu@${{ secrets.EC2_HOST }}:${{ secrets.DEPLOY_DIR }}/
 
-      - name: Restart app on EC2 with PM2 (NVM FIX APPLIED)
-        run: |
-          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p 22 \
-            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+        - name: Restart app on EC2
+          run: |
+            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p 22 ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
 
-            # Load NVM inside non-interactive SSH
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
-            [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
+              # Load NVM properly for non-interactive shell
+              export NVM_DIR="\$HOME/.nvm"
+              [ -s "\$NVM_DIR/nvm.sh" ] && \. "\$NVM_DIR/nvm.sh"
+              [ -s "\$NVM_DIR/bash_completion" ] && \. "\$NVM_DIR/bash_completion"
 
-            # Use node version installed via NVM
-            nvm use 20
+              # Use node version (20.x installed on your server)
+              nvm use 20
 
-            echo "Using Node:  \$(which node)"
-            echo "Using NPM:   \$(which npm)"
-            echo "Using PM2:   \$(which pm2)"
+              echo "Node path: \$(which node)"
+              echo "NPM path: \$(which npm)"
+              echo "PM2 path: \$(which pm2)"
 
-            cd "${{ secrets.DEPLOY_DIR }}"
+              cd "${{ secrets.DEPLOY_DIR }}"
 
-            echo "Installing production dependencies..."
-            npm ci --only=production
+              echo "Installing production dependencies..."
+              npm ci --only=production
 
-            echo "Restarting PM2 app..."
-            if pm2 id "${{ secrets.APP_NAME }}" > /dev/null 2>&1; then
-              pm2 stop "${{ secrets.APP_NAME }}" || true
-              pm2 delete "${{ secrets.APP_NAME }}" || true
-            fi
+              echo "Restarting PM2 app..."
+              if pm2 id "${{ secrets.APP_NAME }}" > /dev/null 2>&1; then
+                pm2 stop "${{ secrets.APP_NAME }}" || true
+                pm2 delete "${{ secrets.APP_NAME }}" || true
+              fi
 
-            pm2 start dist/main.js --name "${{ secrets.APP_NAME }}" --time
-            pm2 save
+              pm2 start dist/main.js --name "${{ secrets.APP_NAME }}" --time
+              pm2 save
 
-          EOF
+            EOF
