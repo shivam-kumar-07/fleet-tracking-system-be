@@ -6,7 +6,7 @@
     "start": "node dist/main.js",
     "start:dev": "ts-node-dev --respawn --transpile-only src/main.ts",
     "start:prod": "node dist/main.js",
-    "build": "tsc -p tsconfig.build.json"
+    "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
     "@nestjs/common": "^10.3.0",
