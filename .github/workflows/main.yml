@@ -82,23 +82,26 @@
 
             ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p 22 ubuntu@${{ secrets.EC2_HOST }} << EOF_REMOTE
               
-            cd "${{ secrets.DEPLOY_DIR }}"
+              cd "${{ secrets.DEPLOY_DIR }}"
 
-            echo "Installing production dependencies..."
-            npm ci --only=production
+              echo "Installing production dependencies..."
+              npm ci --only=production
 
-            echo "Stopping existing app..."
-            if pm2 id fleet-tracking > /dev/null 2>&1; then
-              pm2 stop fleet-tracking || true
-              pm2 delete fleet-tracking || true
-            fi
+              echo "Stopping existing app safely..."
+              pm2 stop fleet-tracking 2>/dev/null || true
+              pm2 delete fleet-tracking 2>/dev/null || true
 
-            echo "Starting app with PM2..."
-            pm2 start dist/main.js --name fleet-tracking --time
-            pm2 save
+              echo "Starting app with PM2..."
+              pm2 start dist/main.js --name fleet-tracking --time
 
-            echo "Remote deploy finished."
-            exit 0
+              echo "Saving PM2 state..."
+              pm2 save
 
+              echo "PM2 status:"
+              pm2 list
+
+              echo "Remote deploy finished."
+              exit 0
             EOF_REMOTE
+
 
