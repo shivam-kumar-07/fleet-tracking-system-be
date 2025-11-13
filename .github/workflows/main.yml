@@ -58,20 +58,6 @@ jobs:
 
       - name: Install SSH + rsync
         run: sudo apt-get update && sudo apt-get install -y rsync openssh-client
-      
-      - name: Debug Secrets (masked)
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_PORT: ${{ secrets.EC2_PORT }}
-          EC2_USER: ${{ secrets.EC2_USER }}
-          DEPLOY_DIR: ${{ secrets.DEPLOY_DIR }}
-          APP_NAME: ${{ secrets.APP_NAME }}
-        run: |
-          echo "EC2_HOST starts with: ${EC2_HOST:0:10}..."
-          echo "EC2_PORT is set to: $EC2_PORT"
-          echo "EC2_USER is: $EC2_USER"
-          echo "DEPLOY_DIR is: $DEPLOY_DIR"
-          echo "APP_NAME is: $APP_NAME"
 
       - name: Configure SSH
         run: |
@@ -85,16 +71,16 @@ jobs:
 
       - name: Upload files to EC2
         env:
-          RSYNC_RSH: "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p ${{ secrets.EC2_PORT }}"
+          RSYNC_RSH: "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p 22"
         run: |
           rsync -avz --delete deploy/ \
-            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:${{ secrets.DEPLOY_DIR }}/
+            ubuntu@${{ secrets.EC2_HOST }}:${{ secrets.DEPLOY_DIR }}/
 
       - name: Restart app on EC2
         run: |
           ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no \
-              -p ${{ secrets.EC2_PORT }} \
-              ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << EOF
+              -p 22 \
+              ubuntu@${{ secrets.EC2_HOST }} << EOF
 
               cd "${{ secrets.DEPLOY_DIR }}"
 
@@ -102,12 +88,12 @@ jobs:
               npm ci --only=production
 
               echo "Restarting PM2 app..."
-              if pm2 id "${{ secrets.APP_NAME }}" > /dev/null 2>&1; then
-                pm2 stop "${{ secrets.APP_NAME }}" || true
-                pm2 delete "${{ secrets.APP_NAME }}" || true
+              if pm2 id fleet-tracking > /dev/null 2>&1; then
+                pm2 stop fleet-tracking || true
+                pm2 delete fleet-tracking || true
               fi
 
-              pm2 start dist/main.js --name "${{ secrets.APP_NAME }}" --time
+              pm2 start dist/main.js --name fleet-tracking --time
               pm2 save
 
           EOF
