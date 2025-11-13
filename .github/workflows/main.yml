@@ -76,34 +76,31 @@
             rsync -avz --delete deploy/ \
               ubuntu@${{ secrets.EC2_HOST }}:${{ secrets.DEPLOY_DIR }}/
 
-        - name: Restart app on EC2
+        - name: Restart app on EC2 with PM2 (FINAL FIX)
           run: |
-            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p 22 ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
+            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p 22 \
+              ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
 
-              # Load NVM properly for non-interactive shell
-              export NVM_DIR="\$HOME/.nvm"
-              [ -s "\$NVM_DIR/nvm.sh" ] && \. "\$NVM_DIR/nvm.sh"
-              [ -s "\$NVM_DIR/bash_completion" ] && \. "\$NVM_DIR/bash_completion"
+                # ABSOLUTE PATHS (replace with your actual node version)
+                export NODE_PATH="/home/ubuntu/.nvm/versions/node/v20.17.0/bin"
+                export PATH="$NODE_PATH:$PATH"
 
-              # Use node version (20.x installed on your server)
-              nvm use 20
+                echo "Node: \$(which node)"
+                echo "NPM:  \$(which npm)"
+                echo "PM2:  \$(which pm2)"
 
-              echo "Node path: \$(which node)"
-              echo "NPM path: \$(which npm)"
-              echo "PM2 path: \$(which pm2)"
+                cd "${{ secrets.DEPLOY_DIR }}"
 
-              cd "${{ secrets.DEPLOY_DIR }}"
+                echo "Installing production dependencies..."
+                /home/ubuntu/.nvm/versions/node/v20.17.0/bin/npm ci --only=production
 
-              echo "Installing production dependencies..."
-              npm ci --only=production
+                echo "Restarting PM2 app..."
+                if /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 id "${{ secrets.APP_NAME }}" > /dev/null 2>&1; then
+                  /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 stop "${{ secrets.APP_NAME }}" || true
+                  /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 delete "${{ secrets.APP_NAME }}" || true
+                fi
 
-              echo "Restarting PM2 app..."
-              if pm2 id "${{ secrets.APP_NAME }}" > /dev/null 2>&1; then
-                pm2 stop "${{ secrets.APP_NAME }}" || true
-                pm2 delete "${{ secrets.APP_NAME }}" || true
-              fi
-
-              pm2 start dist/main.js --name "${{ secrets.APP_NAME }}" --time
-              pm2 save
+                /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 start dist/main.js --name "${{ secrets.APP_NAME }}" --time
+                /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 save
 
             EOF
