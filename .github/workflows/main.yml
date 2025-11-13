@@ -76,31 +76,47 @@
             rsync -avz --delete deploy/ \
               ubuntu@${{ secrets.EC2_HOST }}:${{ secrets.DEPLOY_DIR }}/
 
-        - name: Restart app on EC2 with PM2 (FINAL FIX)
+        - name: Restart app on EC2
           run: |
-            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p 22 \
-              ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            # Fail early if secrets are missing (so you see a clear error in Actions logs)
+            if [ -z "${{ secrets.EC2_HOST }}" ] || [ -z "${{ secrets.EC2_USER }}" ] || [ -z "${{ secrets.DEPLOY_DIR }}" ]; then
+              echo "ERROR: One of required secrets is empty. Ensure EC2_HOST, EC2_USER and DEPLOY_DIR are set in repo secrets."
+              echo "EC2_HOST='${{ secrets.EC2_HOST }}'  EC2_USER='${{ secrets.EC2_USER }}'  DEPLOY_DIR='${{ secrets.DEPLOY_DIR }}'"
+              exit 1
+            fi
 
-                # ABSOLUTE PATHS (replace with your actual node version)
-                export NODE_PATH="/home/ubuntu/.nvm/versions/node/v20.17.0/bin"
-                export PATH="$NODE_PATH:$PATH"
+            # Build destination (this will expand to e.g. ubuntu@ec2-xx-xx-xx-xx.compute.amazonaws.com)
+            DEST="${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}"
 
-                echo "Node: \$(which node)"
-                echo "NPM:  \$(which npm)"
-                echo "PM2:  \$(which pm2)"
+            # Run remote commands
+            ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p ${{ secrets.EC2_PORT }} "${DEST}" << 'EOF_REMOTE'
+              # ---------- On remote server ----------
+              # Use absolute paths for node/npm/pm2 to avoid NVM non-interactive issues.
+              NODE_BIN="/home/ubuntu/.nvm/versions/node/v20.17.0/bin"
+              export PATH="$NODE_BIN:$PATH"
 
-                cd "${{ secrets.DEPLOY_DIR }}"
+              echo "Remote Node: $(which node || echo 'node not found')"
+              echo "Remote NPM:  $(which npm || echo 'npm not found')"
+              echo "Remote PM2:  $(which pm2 || echo 'pm2 not found')"
 
-                echo "Installing production dependencies..."
-                /home/ubuntu/.nvm/versions/node/v20.17.0/bin/npm ci --only=production
+              # change to deploy dir
+              cd "${{ secrets.DEPLOY_DIR }}" || { echo "deploy dir missing"; exit 2; }
 
-                echo "Restarting PM2 app..."
-                if /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 id fleet-tracking > /dev/null 2>&1; then
-                  /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 stop fleet-tracking || true
-                  /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 delete fleet-tracking || true
-                fi
+              echo "Installing production dependencies..."
+              /home/ubuntu/.nvm/versions/node/v20.17.0/bin/npm ci --only=production
 
-                /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 start dist/main.js --name fleet-tracking --time
-                /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 save
+              echo "Stopping existing PM2 app (if any)..."
+              if /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 id fleet-tracking > /dev/null 2>&1; then
+                /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 stop fleet-tracking || true
+                /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 delete fleet-tracking || true
+              fi
 
-            EOF
+              echo "Starting app with PM2..."
+              /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 start dist/main.js --name fleet-tracking --time
+              /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 save
+
+              echo "Remote deploy finished."
+              exit 0
+            EOF_REMOTE
+          shell: bash
+
