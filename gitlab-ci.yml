@@ -1,0 +1,72 @@
+stages:
+  - install
+  - build
+  - deploy
+
+variables:
+  NODE_ENV: production
+  APP_NAME: fleet-tracking
+  DEPLOY_DIR: /home/ubuntu/fleet-app
+  DIST_DIR: dist
+  EC2_USER: ubuntu
+  EC2_PORT: 22
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - node_modules/
+
+install_dependencies:
+  stage: install
+  image: node:18
+  script:
+    - echo "Installing dependencies..."
+    - npm ci
+  artifacts:
+    paths:
+      - node_modules/
+    expire_in: 1h
+
+build_app:
+  stage: build
+  image: node:18
+  script:
+    - echo "Building NestJS app..."
+    - npm run build
+    - echo "Copying files for deployment..."
+    - mkdir deploy
+    - cp -r dist package*.json deploy/
+    - cp -r src/data deploy/
+  artifacts:
+    paths:
+      - deploy/
+    expire_in: 2h
+  only:
+    - main
+
+deploy_to_ec2:
+  stage: deploy
+  image: ubuntu:latest
+  before_script:
+    - apk add --no-cache openssh-client rsync
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan -p $EC2_PORT $EC2_HOST >> ~/.ssh/known_hosts
+  script:
+    - echo "Deploying to EC2..."
+    - rsync -avz -e "ssh -p $EC2_PORT" deploy/ $EC2_USER@$EC2_HOST:$DEPLOY_DIR/
+    - ssh -p $EC2_PORT $EC2_USER@$EC2_HOST << EOF
+        cd $DEPLOY_DIR
+        echo "Installing dependencies on server..."
+        npm ci --only=production
+        echo "Restarting PM2 app..."
+        if pm2 id $APP_NAME > /dev/null 2>&1; then
+          pm2 stop $APP_NAME
+          pm2 delete $APP_NAME
+        fi
+        pm2 start dist/main.js --name $APP_NAME --time
+        pm2 save
+    EOF
+  only:
+    - main
