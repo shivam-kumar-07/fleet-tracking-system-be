@@ -95,12 +95,12 @@
                 /home/ubuntu/.nvm/versions/node/v20.17.0/bin/npm ci --only=production
 
                 echo "Restarting PM2 app..."
-                if /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 id "${{ secrets.APP_NAME }}" > /dev/null 2>&1; then
-                  /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 stop "${{ secrets.APP_NAME }}" || true
-                  /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 delete "${{ secrets.APP_NAME }}" || true
+                if /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 id fleet-tracking > /dev/null 2>&1; then
+                  /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 stop fleet-tracking || true
+                  /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 delete fleet-tracking || true
                 fi
 
-                /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 start dist/main.js --name "${{ secrets.APP_NAME }}" --time
+                /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 start dist/main.js --name fleet-tracking --time
                 /home/ubuntu/.nvm/versions/node/v20.17.0/bin/pm2 save
 
             EOF
